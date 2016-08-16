@@ -1,0 +1,75 @@
+<script type="text/javascript">
+    /* global RED */
+    RED.nodes.registerType('slackor-auditor',{
+        category: 'chat',
+        color: '#3FADB5',
+        defaults: {
+            name: {value:""},
+            apiToken: {value: ""},
+            channels: {value: ""},
+        },
+        inputs:0,
+        outputs:1,
+        icon: "slack.png",
+        label: function() {
+            return this.name||"Slackor Auditor";
+        },
+        paletteLabel: "Slackor Auditor",
+    });
+    RED.nodes.registerType('slackor-speaker',{
+        category: 'chat',
+        color: '#3FADB5',
+        defaults: {
+            name: {value:""},
+            apiToken: {value: ""},
+            channel: {value: ""},
+        },
+        inputs:1,
+        outputs:0,
+        icon: "slack.png",
+        label: function() {
+            return this.name||"Slackor Speaker";
+        },
+        paletteLabel: "Slackor Speaker",
+        align: 'right',
+    });
+</script>
+
+<script type="text/x-red" data-template-name="slackor-auditor">
+    <div class="form-row">
+        <label for="node-input-name"><i class="icon-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name" name="node-input-name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-apiToken"><i class="icon-tag"></i> API Token</label>
+        <input type="text" id="node-input-apiToken" placeholder="API Token" name="node-input-apiToken">
+    </div>
+    <div class="form-row">
+        <label for="node-input-channels"><i class="icon-tag"></i> Channels</label>
+        <input type="text" id="node-input-channels" placeholder="general, channel1, channel2" name="node-input-channels">
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="slackor-auditor">
+    <p>A simple node that converts the message payloads into all lower-case characters</p>
+</script>
+
+
+<script type="text/x-red" data-template-name="slackor-speaker">
+    <div class="form-row">
+        <label for="node-input-name"><i class="icon-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name" name="node-input-name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-apiToken"><i class="icon-tag"></i> API Token</label>
+        <input type="text" id="node-input-apiToken" placeholder="API Token" name="node-input-apiToken">
+    </div>
+    <div class="form-row">
+        <label for="node-input-channel"><i class="icon-tag"></i> Channel</label>
+        <input type="text" id="node-input-channel" placeholder="general" name="node-input-channel">
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="slackor-speaker">
+    <p>A simple node that converts the message payloads into all lower-case characters</p>
+</script>
