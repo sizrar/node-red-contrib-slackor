@@ -1,11 +1,13 @@
 module.exports = function(RED) {
 
     // Load required modules
-    const SlackClient       = require('@slack/client').RtmClient;
-    const MemoryDataStore = require('@slack/client').MemoryDataStore;
+    const PubSub            = require('pubsub-js');
 
-    const CLIENT_EVENTS    = require('@slack/client').CLIENT_EVENTS;
-    const RTM_EVENTS      = require('@slack/client').RTM_EVENTS;
+    const SlackClient       = require('@slack/client').RtmClient;
+    const MemoryDataStore   = require('@slack/client').MemoryDataStore;
+
+    const CLIENT_EVENTS     = require('@slack/client').CLIENT_EVENTS;
+    const RTM_EVENTS        = require('@slack/client').RTM_EVENTS;
     const CLIENT_RTM_EVENTS = require('@slack/client').CLIENT_EVENTS.RTM;
 
     /**
@@ -29,22 +31,47 @@ module.exports = function(RED) {
          * Creates a new client
          */
         var _create = function(token) {
+
             var client = new SlackClient(token, {
                 logLevel: 'none',
                 dataStore: new MemoryDataStore(),
             });
-            client.start();
+
+            // Client connecting
+            client.on(CLIENT_EVENTS.RTM.CONNECTING, function() {
+                PubSub.publish('slackor.client.connecting');
+            });
 
             // Client start success
-            client.on(CLIENT_EVENTS.RTM.AUTHENTICATED, function (rtmStartData) {
-                console.log(`Slackor ~ logged in as ${rtmStartData.self.name} of team ${rtmStartData.team.name}`);
+            client.on(CLIENT_EVENTS.RTM.AUTHENTICATED, function (data) {
+                PubSub.publish('slackor.client.authenticated', data);
             });
 
             // Client start failure (may be recoverable)
-            client.on(CLIENT_EVENTS.RTM.UNABLE_TO_RTM_START, function(rtmStartData) {
-                console.log(`Slackor ~ failed to start client ${rtmStartData}`);
-                return false;
+            client.on(CLIENT_EVENTS.RTM.UNABLE_TO_RTM_START, function(error) {
+                PubSub.publish('slackor.client.unableToStart', error);
             });
+
+            // Client disconnect
+            client.on(CLIENT_EVENTS.RTM.DISCONNECT, function(optError, optCode) {
+                PubSub.publish('slackor.client.disconnect', {
+                    optError: optError,
+                    optCode: optCode,
+                });
+            });
+
+            // Client connection opened
+            client.on(CLIENT_EVENTS.RTM.RTM_CONNECTION_OPENED, function() {
+                PubSub.publish('slackor.client.connectionOpened');
+            });
+
+            // Team received a message
+            client.on(RTM_EVENTS.MESSAGE, function (message) {
+                PubSub.publish('slackor.client.message', message);
+            });
+
+
+            client.start();
 
             return client;
         };
@@ -53,7 +80,6 @@ module.exports = function(RED) {
          * Retrieves a client by API token
          */
         var getByToken = function(token) {
-
             if(token == null || token.trim() == '') {
                 console.log('Slackor ~ no token specified');
                 return false;
@@ -71,10 +97,10 @@ module.exports = function(RED) {
          * Deletes a client by API token
          */
         var deleteByToken = function(token) {
+            // Disconnet & remove from the client list
             if(_list[token] != null) {
                 _list[token].disconnect();
                 _list[token] = null;
-                console.log('Slackor ~ deleted connection for token: ' + token);
             }
         };
 
@@ -88,89 +114,162 @@ module.exports = function(RED) {
     })();
 
     /**
+     * Logger
+     */
+    Slackor.Logger = (function() {
+        var connecting = function(msg) {
+            console.log(`Slackor ~ connecting...`);
+        };
+
+        var authenticated = function(msg, data) {
+            console.log(`Slackor ~ logged in as @${data.self.name} of team ${data.team.name}`);
+        };
+
+        var unableToStart = function(msg, data) {
+            console.log(`Slackor ~ unable to connect`);
+        };
+
+        var disconnect = function(msg) {
+            //console.log(data.optError, data.optCode);
+            console.log(`Slackor ~ disconnected`);
+        };
+
+        var message = function(msg, data) {
+            console.log(`Slackor ~ received a message`);
+        };
+
+        PubSub.subscribe('slackor.client.disconnect', disconnect);
+        PubSub.subscribe('slackor.client.unableToStart', unableToStart);
+        PubSub.subscribe('slackor.client.connecting', connecting);
+        PubSub.subscribe('slackor.client.message', message);
+        PubSub.subscribe('slackor.client.authenticated', authenticated);
+    })();
+
+    /**
      * Speaker
      */
-    Slackor.Speaker = (function(config){
-
+    Slackor.Speaker = (function(config) {
         RED.nodes.createNode(this, config);
 
-        var token  = config.apiToken;
-        var client = Slackor.Clients.getByToken(token);
-        var node = this;
+        const client = Slackor.Clients.getByToken(config.apiToken);
+        const node = this;
 
-        if(client) {
-            client.on(CLIENT_EVENTS.RTM.RTM_CONNECTION_OPENED, function () {
-
-                var channel = client.dataStore.getGroupByName(config.channel)
-                    || client.dataStore.getChannelByName(config.channel);
-
-                if(channel == null) {
-                    console.log('Slackor ~ channel not found');
-                    return node;
-                }
-
-                node.on('input', function(message) {
-                    client.sendMessage(message.payload.toString(), channel.id, function messageSent() {
-                        console.log('Slackor ~ sent message on channel: ' + config.channel);
-                    });
-                });
+        var disconnect = function() {
+            node.status({
+                fill: "red",
+                shape: "dot",
+                text: "disconnected",
             });
+        };
 
-            node.on('close', function() {
-                Slackor.Clients.deleteByToken(token);
+        var connectionOpened = function() {
+            node.status({
+                fill: "green",
+                shape: "dot",
+                text: "connected",
             });
+        };
 
-            return node;
-        }
+        var subscriptions = [
+            PubSub.subscribe('slackor.client.disconnect', disconnect),
+            PubSub.subscribe('slackor.client.connectionOpened', connectionOpened),
+        ];
+
+        node.on('input', function(msg) {
+            if(msg.payload == null || msg.payload.trim() == '') {
+                msg.payload = 'Nothing was specified, please pass a payload property to the msg object';
+            }
+            client.sendMessage(msg.payload, msg.channel.id);
+        });
+
+        node.on('close', function() {
+            Slackor.Clients.deleteByToken(config.apiToken);
+            for(var s in subscriptions) {
+               PubSub.unsubscribe(subscriptions[s]);
+           }
+        });
+
+        PubSub.subscribe('slackor.client.disconnect', disconnect);
+
+        return node;
     });
 
     /**
      * Speaker
      */
-    Slackor.Auditor = (function(config){
-
+    Slackor.Auditor = (function(config) {
         RED.nodes.createNode(this, config);
 
-        var token  = config.apiToken;
-        var client = Slackor.Clients.getByToken(token);
+        var client = Slackor.Clients.getByToken(config.apiToken);
         var node = this;
 
-        if(client) {
-            client.on(RTM_EVENTS.MESSAGE_ME_MESSAGE, function (message) {
-
-            });
-            client.on(RTM_EVENTS.MESSAGE, function (message) {
-
-                var listen = false;
-
-                //if (message.text.includes(`<@${client.activeUserId}>`)) {
-                    var channel = client.dataStore.getDMById(message.channel)
-                        || client.dataStore.getGroupById(message.channel)
-                        || client.dataStore.getChannelById(message.channel);
-
-                    if(config.channels.trim() !== '') {
-                        var watchedChannels = config.channels.split(",");
-                        if(watchedChannels.indexOf(channel.name) > -1) {
-                            listen = true;
-                        }
-                    } else {
-                        listen = true;
+        var channelIsWatched = function(channelId, watchList) {
+            if(watchList != null && watchList.trim() != '') { // Listen only on specified channels
+                if(channelId.substr(0,1) == 'D') {
+                    return true;
+                }
+                var watchedChannels = config.channels.split(',');
+                for(var i = 0, m = watchedChannels.length; i < m; i++) {
+                    var channel = client.dataStore.getChannelOrGroupByName(watchedChannels[i]);
+                    if(channelId == channel.id) {
+                        return true;
                     }
+                }
+            } else { // Listen on all channels
+                return true;
+            }
+            return false;
+        };
 
-                    if(listen) {
-                        node.send(message);
-                        console.log('Slackor ~ received message on channel: ' + channel.name);
-                    }
-                //}
-
+        var disconnect = function() {
+            node.status({
+                fill: "red",
+                shape: "dot",
+                text: "disconnected",
             });
+        };
 
-            node.on('close', function() {
-                Slackor.Clients.deleteByToken(token);
+        var authenticated = function() {
+
+            node.status({
+                fill: "green",
+                shape: "dot",
+                text: "connected",
             });
+        };
 
-            return node;
-        }
+        var message = function(msg, data) {
+
+            // Ignore deleted messages
+            if(data.subtype != null && data.subtype == 'message_deleted') {
+                return false;
+            }
+
+            if(channelIsWatched(data.channel, config.channels)) {
+                var output = {
+                    channel: {
+                        id: data.channel,
+                    },
+                };
+
+                node.send(output);
+            }
+        };
+
+        var subscriptions = [
+            PubSub.subscribe('slackor.client.message', message),
+            PubSub.subscribe('slackor.client.disconnect', disconnect),
+            PubSub.subscribe('slackor.client.authenticated', authenticated),
+        ];
+
+        node.on('close', function() {
+           Slackor.Clients.deleteByToken(config.apiToken);
+           for(var s in subscriptions) {
+               PubSub.unsubscribe(subscriptions[s]);
+           }
+        });
+
+        return node;
     });
 
     RED.nodes.registerType("slackor-auditor", Slackor.Auditor);

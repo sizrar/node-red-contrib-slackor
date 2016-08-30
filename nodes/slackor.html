@@ -51,8 +51,11 @@
 </script>
 
 <script type="text/x-red" data-help-name="slackor-auditor">
-    <p>A simple node that converts the message payloads into all lower-case characters</p>
-</script>
+    <h1>Listens in slack</h1>
+    <p><b>Configuring behavior:</b><p>
+    <ul>
+        <li><b>Slack Channels:</b> you can control which slack channels are listened to by specifying them in the node's configuration properties. Seperate multiple channels by commas without spaces. (i.e: general,channel1,channel2).<br/><b>Note:</b> This node can only listen to channels in which the associated Slack Bot has been invited.</li>
+    </ul></script>
 
 
 <script type="text/x-red" data-template-name="slackor-speaker">
@@ -64,12 +67,13 @@
         <label for="node-input-apiToken"><i class="icon-tag"></i> API Token</label>
         <input type="text" id="node-input-apiToken" placeholder="API Token" name="node-input-apiToken">
     </div>
-    <div class="form-row">
-        <label for="node-input-channel"><i class="icon-tag"></i> Channel</label>
-        <input type="text" id="node-input-channel" placeholder="general" name="node-input-channel">
-    </div>
 </script>
 
 <script type="text/x-red" data-help-name="slackor-speaker">
-    <p>A simple node that converts the message payloads into all lower-case characters</p>
+    <h1>Speaks in slack</h1>
+    <p><b>Configuring behavior:</b><p>
+    <ul>
+        <li><b>Slack Channel:</b> control the slack channel by passing the slack channel id as the <code>msg.channel.id</code> property. The Slackor Auditor node passes the id of channel in which it hears a message as the same property. Therefore, by default, the Slackor Speaker node speaks in the same channel the Slackor Auditor node hears.</li>
+        <li><b>Message content:</b> pass a message via <code>msg.payload</code></li>
+    </ul>
 </script>
