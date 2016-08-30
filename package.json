@@ -1,0 +1,19 @@
+{
+  "name": "node-red-contrib-slackor",
+  "version": "0.1.0",
+  "description": "A slack node for node-red",
+  "dependencies": {
+    "@slack/client": "^3.5.4",
+    "pubsub-js": "^1.5.3"
+  },
+  "devDependencies": {},
+  "keywords":[
+  ],
+  "author": "Robert Al-Romhein",
+  "license": "MIT",
+  "node-red": {
+    "nodes": {
+      "slackor": "slackor/slackor.js"
+    }
+  }
+}
