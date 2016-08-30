@@ -16,3 +16,8 @@ Speaks in slack a single slack channel which the associated Slack Bot has joined
 ### Configuring behavior:
 * **Slack Channel:** control the slack channel by passing the slack channel id as the <code>msg.channel.id</code> property. The Slackor Auditor node passes the id of channel in which it hears a message as the same property. Therefore, by default, the Slackor Speaker node speaks in the same channel the Slackor Auditor node hears.
 * **Message content:** pass a message via `msg.payload`
+
+## Dependencies
+
+* @slack/client
+* pubsub-js
